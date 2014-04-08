@@ -64,23 +64,23 @@ Actions:                Arguments:
 
 Examples:
 
-   * Start a Bash shell on the Pi:
+   # Start a Bash shell on the Pi:
 picmd connect
 
-   * Execute "ls /var/www/html/" on the Pi
+   # Execute "ls /var/www/html/" on the Pi
 picmd execute ls /var/www/html/
 
-   * Mount and unmount your Pis music folder on your workstation
+   # Mount and unmount your Pis music folder on your workstation
 picmd sshmount /media/music /home/username/Music/
 picmd unmount /home/username/Music/
 
-   * Install/Remove/Update/Search Software
+   # Install/Remove/Update/Search Software
 picmd install package-name otherPackage stuff
 picmd uninstall package-name
 picmd upgrade
 picmd apt-search firefox
 
-   * Upload/Download files to/from the Pi
+   # Upload/Download files to/from the Pi
 picmd upload /home/username/nice-image.png /var/www/html/my-site/
 picmd download /var/www/html/my-site/index.html /home/username/Workspace/my-site/
 
