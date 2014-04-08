@@ -1,0 +1,433 @@
+#!/bin/bash
+
+## Configuration (Will be overwritten by the config file)
+APP='[Picmd Version 0.0.1]'
+SSH_PORT='22'
+SSH_KEY="~/.ssh/id_rsa"
+
+
+if [ -f ~/.picmd ] ; then
+	. ~/.picmd
+fi
+
+## Functions
+errortest(){
+	if [ $? != '0' ] ; then
+		echo
+		echo "Failed to execute: ${TASK}"
+		echo
+		exit 1
+	else
+		echo
+                echo "Successfuly executed: ${TASK}"
+                echo
+	fi
+}
+
+showhelp(){
+	if [ -z $1 ] ; then
+                help
+                exit 1
+        fi
+}
+
+connect(){
+	ssh -i ${SSH_KEY} -p ${SSH_PORT} ${PI_USER}@${RASPI_IP}
+}
+
+reboot(){
+	        echo
+        read -p 'Are you sure you want to halt the system? (yes/no): ' YESNO
+        if [ -z $YESNO ] ; then
+                YESNO=no
+        fi
+        if [ $YESNO = yes ] ; then
+                echo 'System going down for reboot in 30 sec...
+Save your work now or it will be lost!' | wall
+        fi
+        sleep 20
+        echo && echo 'System going down for reboot in 10 sec...
+Save your work now or it will be lost!' | wall
+        sleep 10
+	execute reboot
+	if [ $? != 0 ] ; then
+                exit $?
+        else
+                exit 0
+        fi 
+}
+
+poweroff(){
+	echo
+	read -p 'Are you sure you want to halt the system? (yes/no): ' YESNO
+	if [ -z $YESNO ] ; then
+		YESNO=no
+	fi
+	if [ $YESNO = yes ] ; then
+		echo 'System going down for halt in 30 sec...
+Save your work now or it will be lost!' | wall
+	fi
+	sleep 20
+	echo && echo 'System going down for halt in 10 sec...
+Save your work now or it will be lost!' | wall
+	sleep 10
+	execute halt
+	if [ $? != 0 ] ; then
+		exit $?
+	else
+		exit 0
+	fi 
+}
+
+execute(){
+	ssh -i ${SSH_KEY} -p ${SSH_PORT} ${PI_USER}@${RASPI_IP} $@
+}
+
+execute-x11(){
+	ssh -X -i ${SSH_KEY} -p ${SSH_PORT} ${PI_USER}@${RASPI_IP} $@
+}
+
+sshmount(){
+	TASK='Mount SSHFS Filesystem'
+	if [ -z "$1" ] || [ -z "$2" ] ; then
+		echo && echo 'Usage:' && echo 'picmd sshmount [/remote/directory] [/local/mount/point]' && echo
+		exit 1
+	fi
+	if [ ! -d "$2" ] ; then
+		mkdir "$2"
+	fi
+
+	sshfs ${PI_USER}@${RASPI_IP}:"$1" "$2"
+	errortest
+	echo && echo 'Contents:' && echo
+	ls "$2"
+	echo
+}
+
+root-sshmount(){
+	TASK='Mount SSHFS Filesystem as root'
+        if [ -z "$1" ] || [ -z "$2" ] ; then
+                echo && echo 'Usage:' && echo 'picmd sshmount [/remote/directory] [/local/mount/point]' && echo
+                exit 1
+        fi
+        if [ ! -d "$2" ] ; then
+                mkdir "$2"
+        fi
+	sudo sshfs ${PI_USER}@${RASPI_IP}:"$1" "$2" -o allow_other
+	errortest
+        echo && echo 'Contents:' && echo
+        ls "$2"
+        echo
+}
+
+unmount(){
+		TASK='Unmount SSHFS Filesystem'
+	        if [ -z "$1" ] ; then
+                	echo && echo 'Usage:' && echo 'picmd unmount [/local/mount/point]' && echo
+                	exit 1
+        	fi
+		fusermount -u "$1"
+		if [ $? != 0 ] ; then
+			sudo fusermount -u "$1"
+			errortest
+		fi
+		if [ $? != 0 ] ; then
+			echo && echo 'Failed to unmount the share, it might still be in use!..'
+			echo && exit 1
+		else
+			echo && echo 'The share has been unmounted successfuly!'
+			echo && exit 0
+		fi
+}
+
+service(){
+	if [ $1 = 'list' ] ; then
+		echo
+                echo 'Listing services might take a while...'
+                echo 'Installed services:'
+                echo
+                execute ls /etc/init.d | grep -v README | grep -v '.sh'
+                echo
+		exit 0
+	fi
+
+	if [ -z $1 ] || [ -z $2 ] ; then
+		echo 'Example:'
+		echo 'picmd service ssh restart'
+		echo
+		exit 1
+	else
+		execute service "$1" "$2"
+	fi
+}
+
+upload(){
+	TASK='Upload Files'
+	showhelp $@
+	rsync -ruv "$1" ${PI_USER}@${RASPI_IP}:"$2"
+	errortest
+}
+
+download(){
+	TASK='Download Files'
+	showhelp $@
+	if [ -z $2 ] ; then
+                LOCALDIR="$PWD"
+        else
+                LOCALDIR="$2"
+        fi
+
+	rsync -ruv ${PI_USER}@${RASPI_IP}:"$1" "$LOCALDIR"
+}
+
+autostart(){
+	TASK='Edit Autostart Services'
+	showhelp $@
+	if [ $2 = enable ] ; then
+		execute update-rc.d "$1" defaults
+		errortest
+	elif [ $2 = disable ] ; then
+		execute update-rc.d -f "$1" remove
+		errortest
+	fi
+}
+
+update(){
+	execute apt-get update
+}
+
+upgrade(){
+	update
+	execute apt-get dist-upgrade
+}
+
+install(){
+	execute apt-get install $@
+}
+
+uninstall(){
+	execute apt-get remove $@
+}
+
+apt-search(){
+	clear
+	echo
+	echo '#### Search might take a while, be patient... #####'
+	echo '######### Apt-cache Search Results: #############'
+	echo
+	execute apt-cache search $1
+}
+
+clean(){
+	execute apt-get clean
+	execute apt-get --purge autoremove
+}
+
+firewall(){
+	echo
+	showhelp $@
+	if [ $1 = enable ] || [ $1 = disable ]; then
+		execute ufw $1
+	elif [ $1 = status ] ; then
+		execute ufw $1
+	else
+		execute ufw $@
+	fi
+	echo
+}
+
+configure(){
+	if [ -f ~/.picmd ] ; then
+		cp -v ~/.picmd ~/.picmd.bkp
+	fi
+	clear
+
+questions(){
+	echo 'Answer the following questions to configure picmd'
+	echo 'Press [Enter] for the (default value)'
+	echo
+	read -p 'Enter your Pi username (root): ' PI_USER
+	if [ -z "$PI_USER" ] ; then
+		PI_USER='root'
+	fi
+	echo
+	read -p 'Enter your Pi IP address: ' RASPI_IP
+	echo
+	read -p 'Enter your Pi SSH port (22): ' SSH_PORT
+	if [ -z "$SSH_PORT" ] ; then
+                SSH_PORT='22'
+        fi
+	echo
+	read -p 'Enter your Pi SSH key (~/.ssh/id_rsa): ' SSH_KEY
+        if [ -z "$SSH_KEY" ] ; then
+                SSH_KEY="~/.ssh/id_rsa"
+        fi
+	clear
+	        echo "New config will be created using these values:"
+        echo
+        echo "          Pi User:        $PI_USER"
+        echo "          Pi IP address:  $RASPI_IP"
+        echo "          SSH port:       $SSH_PORT"
+        echo "          SSH key:        $SSH_KEY"
+        echo
+}
+
+create-conf(){
+        echo
+        echo 'Creating Config File...'
+        echo "PI_USER=$PI_USER" > ~/.picmd
+        echo "RASPI_IP=$RASPI_IP" >> ~/.picmd
+        echo "SSH_PORT=$SSH_PORT" >> ~/.picmd
+        echo "SSH_KEY=$SSH_KEY" >> ~/.picmd
+        echo
+}
+	questions
+	read -p 'Is this correct? (yes/no): ' YESNO
+	if [ -z $YESNO ] ; then
+		YESNO=yes
+	fi
+
+	if [ $YESNO = no ] ; then
+		questions
+		create-conf
+	elif [ $YESNO = yes ] ; then
+		create-conf
+	else
+		echo 'Invalid argument!, answer yes or no.'
+		exit 1
+	fi
+}
+
+add-key(){
+	cat "$SSH_KEY".pub | ssh -p $SSH_PORT ${PI_USER}@${RASPI_IP} echo - >> .ssh/authorized_keys
+}
+
+list-shares(){
+	echo && echo 'Available Remote Shares:' && echo
+	execute cat /etc/fstab | grep -v mmc | awk '{ print $2 }' | grep -v /boot | grep -v swap
+	echo
+	echo 'To mount a remote disk on the Pi run:'
+	echo 'picmd execute mount $MOUNT_POINT'
+	echo
+	echo 'Mounted Shares:'
+	echo
+	mount | grep media | awk '{ print $3 }'
+	echo
+}
+
+mplay(){
+	PI_USER=shared
+	execute	mplayer ${@}*
+	. ~/.picmd
+}
+
+mplaylist(){
+	PI_USER=shared
+#        execute mplayer -shuffle -playlist ${1}
+	execute mplaylist # Needs mplaylist executable on the server
+        . ~/.picmd
+}
+
+
+help(){
+	echo
+	echo "$APP"
+	echo
+	cat << EOF
+Usage:
+	picmd [action] [arguments]
+
+Actions:		Arguments:
+
+	configure	:	Create new config file
+	add-key		:	Upload public ssh key to Pi
+
+	connect		:	Open a remote BASH shell
+	execute		-	Any command
+	execute-x11	-	gui-program (forward remote X11 apps to local xorg)
+
+	reboot
+	poweroff
+
+	list-shares	:	List remote shares
+	sshmount	-	/remote/directory /local/mount/point
+	root-sshmount	-	/remote/directory /local/mount/point
+	unmount		-	/local/mount/point
+
+	service		-	service-name [start|stop|restart|status]
+			-	list  (lists all available services)
+	autostart	-	service-name [enable|disable]
+	firewall	-	port/type [allow|deny]
+			-	[enable|disable|status]
+
+	upload		-	local/file /remote/directory
+	download	-	/remote/file /local/directory
+
+	update		:	Update server apt sources
+	upgrade		:	Perform update and do dist-upgrade
+	install		-	app-1 app-2 app-ect
+	uninstall	-	app-1 app-2 app-ect
+	apt-search	-	app-name
+	clean		:	clean apt cache + autoremove orphaned packages
+
+	mplay		-	/remote/path/to/music/dir/or/file.mp3
+	mplaylist       -       /remote/path/to/playlist.txt
+
+	help		:	Display this help text
+EOF
+
+echo
+}
+
+
+## Check for config and create new config if not found
+if [ -f ~/.picmd ] ; then
+        . ~/.picmd
+else
+	clear
+	echo 'picmd has not been configured yet!'
+	read -p 'Press [Enter] to start configuration: '
+	echo
+	configure && sleep 3
+fi
+
+## Execute arguments or show help when no arguments are given
+if [ -z $1 ] ; then
+	help
+	exit 1
+else
+	$@
+fi
+
+exit 0
+
+
+###### Save the following script on your Pi
+### Save as: /usr/local/bin/mplaylist
+#!/bin/bash
+#
+#makemenu(){
+#        clear
+#        echo
+#        echo 'Select a genre from the list below:'
+#        echo
+#
+#        cd /home/shared/Playlists
+#        OPTIONS=`ls`
+#        OPTIONS="$OPTIONS Quit"
+#
+#        select opt in $OPTIONS; do
+#        if [ "$opt" = 'Quit' ] ; then
+#                echo done
+#                exit 0
+#        elif [ ! -f "$opt" ] ; then
+#                clear
+#                echo bad option
+#        else
+#                mplayer -shuffle -playlist "$opt"
+#        fi
+#        done
+#}
+#makemenu
+#
+#exit $?
