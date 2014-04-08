@@ -1,0 +1,44 @@
+#!/bin/bash
+
+clear
+echo 'This script will locate all mp3, mp4 and ogg files'
+echo 'in your current working directory and its sub-dirs.'
+echo "Playlists will be linked in ${HOME}/Playlists."
+echo
+echo 'Do you want to continue?: '
+read -p 'Enter a name for the playlist or press [Enter] to quit: ' PLNAME
+if [ -z ${PLNAME} ] ; then
+	exit 0
+elif [ -f ${HOME}/Playlists/${PLNAME} ] || [ -d ${HOME}/Playlists/${PLNAME} ] ; then
+	echo && echo 'A playlist exists with that same name! Will not overwrite it...'
+	echo && echo 'The following names are taken:'
+	ls ${HOME}/Playlists/
+
+	echo && read -p 'Enter a name for the playlist or press [Enter] to quit: ' PLNAME
+	if [ -z ${PLNAME} ] ; then
+        	exit 0
+	fi
+else
+	find -type f -iname \*.ogg >  ${PLNAME}.mplaylist
+	find -type f -iname \*.mp3 >> ${PLNAME}.mplaylist
+	find -type f -iname \*.mp4 >> ${PLNAME}.mplaylist
+
+	TEST=`cat ${PLNAME}.mplaylist`
+
+	if [ -z "$TEST" ] ; then
+		echo && echo 'No supported audio files where found!'
+		echo 'Cannot continue...'
+		exit 1
+	fi
+	echo && echo 'Creating a playlist link in your home folder....'
+	if [ ! -d ${HOME}/Playlists ] ; then
+		mkdir -v ${HOME}/Playlists
+	fi
+	echo
+	echo "${PWD}" > ${HOME}/Playlists/${PLNAME}
+	echo 'All done...'
+	echo
+fi
+
+
+exit $?

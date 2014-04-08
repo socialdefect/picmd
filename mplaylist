@@ -1,0 +1,32 @@
+#!/bin/bash
+
+makemenu(){
+	clear
+	echo
+	echo 'Select a genre from the list below:'
+	echo
+
+	cd /home/shared/Playlists
+	OPTIONS=`ls`
+	OPTIONS="$OPTIONS Quit"
+
+	select opt in $OPTIONS; do
+	if [ "$opt" = 'Quit' ] ; then
+                echo done
+                exit 0
+	elif [ ! -f "$opt" ] ; then
+                clear
+                echo bad option
+	else
+		PLURL=`cat "$opt"`
+		cd "$PLURL"
+		mplayer -shuffle -playlist "$opt".mplaylist
+	fi
+        done
+}
+
+makemenu
+
+exit $?
+
+

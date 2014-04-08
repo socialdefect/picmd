@@ -399,35 +399,47 @@ else
 	$@
 fi
 
+## All done, so this is where we'll exit
 exit 0
 
 
 ###### Save the following script on your Pi
 ### Save as: /usr/local/bin/mplaylist
+
+## This function is here to prevent this script from executing the code below
+
+PreventExec(){  
+#### Start Copy at the next line  ###############
 #!/bin/bash
-#
-#makemenu(){
-#        clear
-#        echo
-#        echo 'Select a genre from the list below:'
-#        echo
-#
-#        cd /home/shared/Playlists
-#        OPTIONS=`ls`
-#        OPTIONS="$OPTIONS Quit"
-#
-#        select opt in $OPTIONS; do
-#        if [ "$opt" = 'Quit' ] ; then
-#                echo done
-#                exit 0
-#        elif [ ! -f "$opt" ] ; then
-#                clear
-#                echo bad option
-#        else
-#                mplayer -shuffle -playlist "$opt"
-#        fi
-#        done
-#}
-#makemenu
-#
-#exit $?
+
+makemenu(){
+	clear
+	echo
+	echo 'Select a playlist from the list below:'
+	echo
+
+	cd /home/shared/Playlists
+	OPTIONS=`ls`
+	OPTIONS="$OPTIONS Quit"
+
+	select opt in $OPTIONS; do
+	if [ "$opt" = 'Quit' ] ; then
+                echo done
+                exit 0
+	elif [ ! -f "$opt" ] ; then
+                clear
+                echo bad option
+	else
+		PLURL=`cat "$opt"`
+		cd "$PLURL"
+		mplayer -shuffle -playlist "$opt".mplaylist
+	fi
+        done
+}
+
+makemenu
+
+exit $?
+### Stop Copy on the previous line  #####
+
+}
